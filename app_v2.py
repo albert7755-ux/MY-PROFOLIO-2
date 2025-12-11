@@ -54,8 +54,6 @@ if st.sidebar.button('開始計算'):
                 returns = df_close.pct_change().dropna()
                 cov_matrix = returns.cov() * 252
                 mean_returns = returns.mean() * 252
-                
-                # 計算相關係數矩陣 (新增功能)
                 corr_matrix = returns.corr()
                 
                 num_assets = len(tickers)
@@ -75,16 +73,30 @@ if st.sidebar.button('開始計算'):
                 with tab1:
                     st.subheader("🛡️ 策略目標：極致抗跌")
                     
+                    # 1. 運算
                     def min_variance(weights, cov_matrix):
                         return np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
                     
                     res_min = minimize(min_variance, init_guess, args=(cov_matrix,), 
                                        method='SLSQP', bounds=bounds, constraints=constraints)
-                    
                     w_min = res_min.x
                     
+                    # 2. 計算指標
+                    exp_ret_min = np.sum(mean_returns * w_min)
+                    exp_vol_min = res_min.fun
+                    
                     col1_1, col1_2 = st.columns([1, 2])
+                    
                     with col1_1:
+                        # ★修改點 1：將重要指標移到最上方
+                        st.markdown("### 📊 預期績效")
+                        col_m1, col_m2 = st.columns(2)
+                        col_m1.metric("預期年化報酬", f"{exp_ret_min:.2%}")
+                        col_m2.metric("預期年化波動", f"{exp_vol_min:.2%}", delta="極低", delta_color="normal")
+                        st.caption("註：基於歷史數據之理論估值")
+                        
+                        st.divider() # 分隔線
+                        
                         clean_w = [round(w, 4) if w > 0.0001 else 0.0 for w in w_min]
                         df_min = pd.DataFrame({'標的': tickers, '配置': clean_w})
                         df_min['顯示權重'] = df_min['配置'].apply(lambda x: f"{x:.1%}")
@@ -92,7 +104,6 @@ if st.sidebar.button('開始計算'):
                         
                         st.info(f"主力配置：**{df_min.iloc[0]['標的']}**")
                         st.table(df_min[['標的', '顯示權重']])
-                        st.metric("預期年化波動", f"{res_min.fun:.2%}", delta="極低", delta_color="normal")
                         
                         fig_pie = px.pie(df_min[df_min['配置']>0], values='配置', names='標的', hole=0.4)
                         fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
@@ -108,11 +119,22 @@ if st.sidebar.button('開始計算'):
                         fig_line.update_traces(line=dict(width=1), opacity=0.3)
                         fig_line.update_traces(selector=dict(name="🛡️ 最小風險組合"), line=dict(color='green', width=4), opacity=1)
                         st.plotly_chart(fig_line, use_container_width=True)
+                        
+                        # ★修改點 2：新增回測年化報酬 (CAGR)
+                        total_ret = port_val.iloc[-1] - 1
+                        # CAGR 公式：(終值/初值)^(1/年數) - 1
+                        cagr = (port_val.iloc[-1])**(1/years) - 1
+                        
+                        st.markdown("### 💰 實際回測結果")
+                        col_b1, col_b2 = st.columns(2)
+                        col_b1.metric("期間總報酬率", f"{total_ret:.2%}")
+                        col_b2.metric("回測年化報酬 (CAGR)", f"{cagr:.2%}", help="這段期間平均每年的複利成長率")
 
                 # --- Tab 2: 最大夏普 ---
                 with tab2:
                     st.subheader("🚀 策略目標：最高 CP 值")
                     
+                    # 1. 運算
                     def neg_sharpe_ratio(weights, mean_returns, cov_matrix, rf):
                         p_ret = np.sum(mean_returns * weights)
                         p_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
@@ -121,14 +143,26 @@ if st.sidebar.button('開始計算'):
                     args = (mean_returns, cov_matrix, risk_free_rate)
                     res_sharpe = minimize(neg_sharpe_ratio, init_guess, args=args,
                                           method='SLSQP', bounds=bounds, constraints=constraints)
-                    
                     w_sharpe = res_sharpe.x
+                    
+                    # 2. 計算指標
                     exp_ret_sharpe = np.sum(mean_returns * w_sharpe)
                     exp_vol_sharpe = np.sqrt(np.dot(w_sharpe.T, np.dot(cov_matrix, w_sharpe)))
                     sharpe_ratio = (exp_ret_sharpe - risk_free_rate) / exp_vol_sharpe
 
                     col2_1, col2_2 = st.columns([1, 2])
+                    
                     with col2_1:
+                        # ★修改點 1：將重要指標移到最上方
+                        st.markdown("### 📊 預期績效")
+                        col_s1, col_s2, col_s3 = st.columns(3)
+                        col_s1.metric("預期年化報酬", f"{exp_ret_sharpe:.2%}")
+                        col_s2.metric("預期年化波動", f"{exp_vol_sharpe:.2%}")
+                        col_s3.metric("夏普值", f"{sharpe_ratio:.2f}")
+                        st.caption("註：基於歷史數據之理論估值")
+                        
+                        st.divider()
+
                         clean_w_s = [round(w, 4) if w > 0.0001 else 0.0 for w in w_sharpe]
                         df_sharpe = pd.DataFrame({'標的': tickers, '配置': clean_w_s})
                         df_sharpe['顯示權重'] = df_sharpe['配置'].apply(lambda x: f"{x:.1%}")
@@ -136,7 +170,6 @@ if st.sidebar.button('開始計算'):
                         
                         st.info(f"主力配置：**{df_sharpe.iloc[0]['標的']}**")
                         st.table(df_sharpe[['標的', '顯示權重']])
-                        st.metric("夏普值 (CP值)", f"{sharpe_ratio:.2f}", delta="優異")
                         
                         fig_pie_s = px.pie(df_sharpe[df_sharpe['配置']>0], values='配置', names='標的', hole=0.4)
                         fig_pie_s.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
@@ -152,9 +185,18 @@ if st.sidebar.button('開始計算'):
                         fig_line_s.update_traces(line=dict(width=1), opacity=0.3)
                         fig_line_s.update_traces(selector=dict(name="🚀 最大夏普組合"), line=dict(color='red', width=4), opacity=1)
                         st.plotly_chart(fig_line_s, use_container_width=True)
+                        
+                        # ★修改點 2：新增回測年化報酬 (CAGR)
+                        total_ret_s = port_val_s.iloc[-1] - 1
+                        cagr_s = (port_val_s.iloc[-1])**(1/years) - 1
+                        
+                        st.markdown("### 💰 實際回測結果")
+                        col_sb1, col_sb2 = st.columns(2)
+                        col_sb1.metric("期間總報酬率", f"{total_ret_s:.2%}")
+                        col_sb2.metric("回測年化報酬 (CAGR)", f"{cagr_s:.2%}", help="這段期間平均每年的複利成長率")
 
                 # ==========================
-                # C. 進階分析：相關係數矩陣 (新增區塊)
+                # C. 進階分析
                 # ==========================
                 st.markdown("---")
                 with st.expander("📊 進階分析：資產相關性熱力圖 (Correlation Heatmap)", expanded=True):
@@ -163,13 +205,7 @@ if st.sidebar.button('開始計算'):
                     * **紅色 (接近 1)**：兩者走勢高度同步，風險無法分散。
                     * **藍色 (接近 0 或負數)**：兩者走勢不相關或相反，**這是資產配置的最佳搭擋！**
                     """)
-                    
-                    # 畫熱力圖
-                    fig_corr = px.imshow(corr_matrix, 
-                                         text_auto='.2f', 
-                                         aspect="auto", 
-                                         color_continuous_scale='RdBu_r', # 紅藍配色
-                                         zmin=-1, zmax=1)
+                    fig_corr = px.imshow(corr_matrix, text_auto='.2f', aspect="auto", color_continuous_scale='RdBu_r', zmin=-1, zmax=1)
                     st.plotly_chart(fig_corr, use_container_width=True)
 
             except Exception as e:
@@ -177,7 +213,7 @@ if st.sidebar.button('開始計算'):
 else:
     st.info("請輸入代號並開始計算")
 
-# --- 側邊欄：免責聲明 (修正位置：移到最外層，靠左對齊) ---
+# --- 免責聲明 ---
 st.sidebar.markdown("---")
 st.sidebar.caption("⚠️ **免責聲明**")
 st.sidebar.caption("""
