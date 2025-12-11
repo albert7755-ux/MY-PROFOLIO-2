@@ -185,4 +185,4 @@ if st.sidebar.button('開始計算'):
             except Exception as e:
                 st.error(f"發生錯誤：{str(e)}")
 else:
-    st.info("請輸入代號並開始計算")# MY-PROFOLIO-2
+    st.info("請輸入代號並開始計算")
