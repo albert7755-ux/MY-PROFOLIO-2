@@ -186,3 +186,11 @@ if st.sidebar.button('開始計算'):
                 st.error(f"發生錯誤：{str(e)}")
 else:
     st.info("請輸入代號並開始計算")
+    # --- 側邊欄：免責聲明 ---
+st.sidebar.markdown("---")
+st.sidebar.caption("⚠️ **免責聲明**")
+st.sidebar.caption("""
+本工具僅供市場分析與模擬參考，不構成任何投資建議或邀約。
+歷史績效不代表未來獲利保證。
+投資人應審慎評估風險，並自負盈虧。
+""")
